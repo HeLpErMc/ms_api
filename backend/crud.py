@@ -192,3 +192,117 @@ def get_owners_with_specific_lastname(db: Session):
         for r in result
     ]
 
+
+def get_wings_with_profit_between_1_and_2(db: Session):
+    """Получить экспонаты с рентабельностью от 1.0 до 2.0"""
+    result = (db.query(
+        models.Wing.id,
+        models.Wing.name,
+        models.Wing.profit,
+        models.Type.name.label('type_name'),
+        func.concat(models.Owner.first_name, ' ', models.Owner.last_name).label('owner_name')
+    )
+    .join(models.Type, models.Wing.type_id == models.Type.id, isouter=True)
+    .join(models.Owner, models.Wing.owner_id == models.Owner.id, isouter=True)
+    .filter(models.Wing.profit.between(1.0, 2.0))
+    .order_by(desc(models.Wing.profit))
+    .all())
+    
+    return [
+        {
+            "id": r[0],
+            "name": r[1],
+            "profit": r[2],
+            "type_name": r[3],
+            "owner_name": r[4]
+        }
+        for r in result
+    ]
+
+
+def get_oldest_low_profit_wings(db: Session, limit: int = 10):
+    """Получить самые старые экспонаты с низкой рентабельностью (< 1.0)"""
+    subquery = (db.query(
+        models.Move.wing_id,
+        func.min(models.Move.dt).label('first_move_date')
+    )
+    .group_by(models.Move.wing_id)
+    .subquery())
+    
+    result = (db.query(
+        models.Wing.id,
+        models.Wing.name,
+        models.Wing.profit,
+        models.Type.name.label('type_name'),
+        subquery.c.first_move_date,
+        func.concat(models.Owner.first_name, ' ', models.Owner.last_name).label('owner_name')
+    )
+    .join(subquery, models.Wing.id == subquery.c.wing_id, isouter=True)
+    .join(models.Type, models.Wing.type_id == models.Type.id, isouter=True)
+    .join(models.Owner, models.Wing.owner_id == models.Owner.id, isouter=True)
+    .filter(models.Wing.profit < 1.0)
+    .order_by(subquery.c.first_move_date.asc())
+    .limit(limit)
+    .all())
+    
+    return [
+        {
+            "id": r[0],
+            "name": r[1],
+            "profit": r[2],
+            "type_name": r[3],
+            "first_move_date": r[4].isoformat() if r[4] else None,
+            "owner_name": r[5]
+        }
+        for r in result
+    ]
+
+
+
+def get_seasonal_demand_analysis(db: Session):
+    """Анализ сезонности спроса - группировка перемещений по месяцам"""
+    from sqlalchemy import extract
+    
+    result = (db.query(
+        func.strftime('%Y-%m', models.Move.dt).label('month'),
+        func.count(models.Move.id).label('activity_count'),
+        func.avg(models.Move.price).label('avg_promotion_cost')
+    )
+    .group_by('month')
+    .order_by('month')
+    .all())
+    
+    return [
+        {
+            "month": r[0],
+            "activity_count": r[1],
+            "avg_promotion_cost": float(r[2]) if r[2] else 0
+        }
+        for r in result
+    ]
+
+def get_seasonal_demand_analysis_with_details(db: Session):
+    """Расширенный анализ сезонности с дополнительными метриками"""
+    result = (db.query(
+        func.strftime('%Y-%m', models.Move.dt).label('month'),
+        func.count(models.Move.id).label('activity_count'),
+        func.avg(models.Move.price).label('avg_promotion_cost'),
+        func.sum(models.Move.price).label('total_revenue'),
+        func.min(models.Move.price).label('min_price'),
+        func.max(models.Move.price).label('max_price')
+    )
+    .group_by('month')
+    .order_by('month')
+    .all())
+    
+    return [
+        {
+            "month": r[0],
+            "activity_count": r[1],
+            "avg_promotion_cost": float(r[2]) if r[2] else 0,
+            "total_revenue": float(r[3]) if r[3] else 0,
+            "min_price": float(r[4]) if r[4] else 0,
+            "max_price": float(r[5]) if r[5] else 0
+        }
+        for r in result
+    ]
