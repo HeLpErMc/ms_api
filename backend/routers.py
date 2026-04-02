@@ -210,3 +210,47 @@ def get_owners_with_specific_lastname(db: Session = Depends(get_db)):
     if result is None:
         raise HTTPException(status_code=404, detail="Таких фамилий нет")
     return create_response_with_sql(result)
+
+
+
+
+@router.get("/analytics/wings-profit-1-to-2", tags=["📊 Аналитика"])
+def get_wings_with_profit_between_1_and_2(db: Session = Depends(get_db)):
+    """Экспонаты с рентабельностью от 1.0 до 2.0 (экономия)"""
+    result = crud.get_wings_with_profit_between_1_and_2(db)
+    if not result:
+        raise HTTPException(status_code=404, detail="Экспонаты с такой рентабельностью не найдены")
+    return create_response_with_sql(result)
+
+
+@router.get("/analytics/oldest-low-profit-wings", tags=["📊 Аналитика"])
+def get_oldest_low_profit_wings(
+    limit: int = 10, 
+    db: Session = Depends(get_db)
+):
+    """10 самых старых экспонатов с низкой рентабельностью (profit < 1.0)"""
+    result = crud.get_oldest_low_profit_wings(db, limit=limit)
+    if not result:
+        raise HTTPException(status_code=404, detail="Экспонаты с низкой рентабельностью не найдены")
+    return create_response_with_sql(result)
+
+
+@router.get("/analytics/seasonal-demand", tags=["📊 Аналитика"])
+def get_seasonal_demand_analysis(
+    detailed: bool = False,
+    db: Session = Depends(get_db)
+):
+    """
+    Анализ сезонности спроса для тайминга рекламы
+    
+    - При detailed=false: базовый анализ (месяц, активность, средняя стоимость)
+    - При detailed=true: расширенный анализ (+ общая выручка, мин/макс цена)
+    """
+    if detailed:
+        result = crud.get_seasonal_demand_analysis_with_details(db)
+    else:
+        result = crud.get_seasonal_demand_analysis(db)
+    
+    if not result:
+        raise HTTPException(status_code=404, detail="Данные о перемещениях не найдены")
+    return create_response_with_sql(result)
